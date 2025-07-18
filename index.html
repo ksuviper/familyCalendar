@@ -835,7 +835,7 @@
             try {
               const familyName = newDb.exec("SELECT value FROM settings WHERE key = 'family_name'")[0]?.values[0]?.[0] || 'Family';
               const icsUrl = newDb.exec("SELECT value FROM settings WHERE key = 'ics_url'")[0]?.values[0]?.[0] || '';
-              const weatherApiKey = newDb.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0?.values[0]?.[0] || '';
+              const weatherApiKey = newDb.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0]?.values[0]?.[0] || '';
               const weatherCity = newDb.exec("SELECT value FROM settings WHERE key = 'weather_city'")[0]?.values[0]?.[0] || '';
               setFamilyName(familyName);
               setIcsUrl(icsUrl);
