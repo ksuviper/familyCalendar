@@ -43,10 +43,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Family Calendar</title>
-  <!-- CDN scripts with error handling and fallback for ics-js -->
+  <!-- CDN scripts with error handling and fallback -->
   <script src="https://cdn.jsdelivr.net/npm/react@17.0.2/umd/react.production.min.js" onerror="console.error('Failed to load React'); alert('Error loading React. Check network or CDN.');"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@17.0.2/umd/react-dom.production.min.js" onerror="console.error('Failed to load ReactDOM'); alert('Error loading ReactDOM. Check network or CDN.');"></script>
   <script src="https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.min.js" onerror="console.error('Failed to load sql.js'); alert('Error loading sql.js. Check network or CDN.');"></script>
+  <script src="https://cdn.jsdelivr.net/npm/whatwg-fetch@3.6.2/dist/fetch.umd.min.js"></script>
   <script src="https://unpkg.com/ics-js@0.10.2/lib/ics.min.js" 
           onerror="console.error('Failed to load ics-js from CDN'); 
                  const fallbackScript = document.createElement('script'); 
@@ -159,12 +160,12 @@
   <div id="root"></div>
   <script type="text/javascript">
     // Debugging:
-    // 1. Check Safari Web Inspector (Settings > Safari > Advanced > Web Inspector) for network errors.
-    // 2. Verify CDN URLs (e.g., https://unpkg.com/ics-js@0.10.2/lib/ics.min.js) load in a browser.
-    // 3. Ensure ics.min.js is in the same directory as index.html for local fallback.
-    // 4. Verify server endpoints (/db) return/save family_calendar.db correctly.
-    // 5. Ensure file is saved as UTF-8 without BOM.
-    // 6. Disable browser extensions to rule out interference.
+    // 1. Open Safari Web Inspector (Settings > Safari > Advanced > Web Inspector).
+    // 2. Verify CDN URLs (e.g., https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.min.js) load in Safari.
+    // 3. Ensure ics.min.js is in /var/www/html (http://192.168.1.102/ics.min.js).
+    // 4. Check console for sql.js errors, database initialization, and /db endpoint responses.
+    // 5. Save file as UTF-8 without BOM.
+    // 6. Disable Safari extensions (Settings > Safari > Extensions).
 
     const { useState, useEffect } = React;
 
@@ -172,10 +173,13 @@
     let db = null;
     async function initDB() {
       try {
+        console.log('Loading sql.js...');
         const SQL = await window.initSqlJs({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}`
         });
+        console.log('sql.js loaded');
         db = new SQL.Database();
+        console.log('Database created');
         db.run(`
           CREATE TABLE IF NOT EXISTS chores (
             id INTEGER PRIMARY KEY,
@@ -202,15 +206,17 @@
             ('weather_api_key', ''),
             ('weather_city', '');
         `);
-        console.log('SQLite database initialized');
+        console.log('Tables and settings initialized');
+        await loadDB();
+        console.log('SQLite database initialized and saved to server');
         return db;
       } catch (e) {
         console.error('Failed to initialize SQLite:', e);
-        alert('Error initializing database. Please try reloading.');
+        alert('Error initializing database: ' + e.message);
+        return null;
       }
     }
 
-    // Save database to server
     async function saveDB() {
       if (db) {
         try {
@@ -220,73 +226,56 @@
           formData.append('file', blob, 'family_calendar.db');
           const response = await fetch('/db', {
             method: 'POST',
+            headers: { 'Authorization': 'Basic ' + btoa('user:pass') },
             body: formData
           });
           if (!response.ok) throw new Error('Failed to save database');
           console.log('Database saved to server');
         } catch (e) {
           console.error('Failed to save database:', e);
-          alert('Error saving database to server. Check server endpoint.');
+          alert('Error saving database to server.');
         }
       }
     }
 
-    // Load database from server
-    async function loadDB(callback) {
+    async function loadDB() {
       try {
-        const response = await fetch('/db');
-        if (!response.ok) throw new Error('Failed to fetch database');
-        const data = await response.arrayBuffer();
-        db = new window.SQL.Database(new Uint8Array(data));
-        console.log('Database loaded from server');
-        callback();
-      } catch (e) {
-        console.error('Failed to load database from server:', e);
-        alert('Error loading database from server. Initializing new database.');
-        return await initDB();
-      }
-    }
-
-    // Save database to local file (for backups)
-    function saveDBLocal() {
-      if (db) {
-        try {
-          const data = db.export();
-          const blob = new Blob([data], { type: 'application/octet-stream' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'family_calendar.db';
-          a.click();
-          URL.revokeObjectURL(url);
-          console.log('Database saved locally');
-        } catch (e) {
-          console.error('Failed to save database locally:', e);
-          alert('Error saving database locally.');
+        const response = await fetch('/db', {
+          headers: { 'Authorization': 'Basic ' + btoa('user:pass') }
+        });
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          db = new window.SQL.Database(new Uint8Array(arrayBuffer));
+          console.log('Database loaded from server');
+        } else if (response.status !== 404) {
+          throw new Error('Failed to load database');
         }
+      } catch (e) {
+        console.error('Failed to load database:', e);
+        alert('Error loading database from server. Starting with new database.');
       }
     }
 
-    // Load database from local file (for restoring backups)
-    function loadDBLocal(file, callback) {
-      try {
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-          const data = new Uint8Array(e.target.result);
-          db = new window.SQL.Database(data);
-          console.log('Database loaded from local file');
-          await saveDB(); // Sync to server after loading local file
-          callback();
-        };
-        reader.onerror = () => {
-          console.error('Failed to read local database file');
-          alert('Error loading local database file.');
-        };
-        reader.readAsArrayBuffer(file);
-      } catch (e) {
-        console.error('Failed to load local database:', e);
-        alert('Error loading local database.');
-      }
+    async function loadDBLocal() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.db';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            db = new window.SQL.Database(new Uint8Array(arrayBuffer));
+            console.log('Database loaded from local file');
+            await saveDB();
+            window.location.reload();
+          } catch (err) {
+            console.error('Failed to load local database:', err);
+            alert('Error loading local database.');
+          }
+        }
+      };
+      input.click();
     }
 
     // Calendar Component
@@ -310,7 +299,7 @@
               title: vevent.summary,
               start: vevent.startDate.toJSDate(),
               end: vevent.endDate.toJSDate(),
-              color: '#ff6b6b' // Default color
+              color: '#ff6b6b'
             };
           });
           console.log('ICS parsed successfully:', events);
@@ -442,14 +431,14 @@
         }
       }, [db]);
 
-      const addChore = () => {
+      const addChore = async () => {
         if (newChore.task && newChore.assignee && db) {
           try {
             db.run(
               'INSERT INTO chores (task, assignee, points, completed) VALUES (?, ?, ?, ?)',
               [newChore.task, newChore.assignee, newChore.points, 0]
             );
-            saveDB(); // Save to server after adding chore
+            await saveDB();
             const res = db.exec('SELECT * FROM chores');
             const choresData = res[0]?.values.map((row) => ({
               id: row[0],
@@ -469,11 +458,11 @@
         }
       };
 
-      const toggleComplete = (id) => {
+      const toggleComplete = async (id) => {
         if (db) {
           try {
             db.run('UPDATE chores SET completed = NOT completed WHERE id = ?', [id]);
-            saveDB(); // Save to server after toggling
+            await saveDB();
             const res = db.exec('SELECT * FROM chores');
             const choresData = res[0]?.values.map((row) => ({
               id: row[0],
@@ -574,11 +563,11 @@
         }
       }, [db]);
 
-      const addMeal = () => {
+      const addMeal = async () => {
         if (day && meal && db) {
           try {
             db.run('INSERT OR REPLACE INTO meals (day, meal) VALUES (?, ?)', [day, meal]);
-            saveDB(); // Save to server after adding meal
+            await saveDB();
             const res = db.exec('SELECT * FROM meals');
             const mealsData = res[0]?.values.reduce((acc, row) => ({
               ...acc,
@@ -595,11 +584,11 @@
         }
       };
 
-      const addGrocery = () => {
+      const addGrocery = async () => {
         if (newGrocery && db) {
           try {
             db.run('INSERT INTO grocery_list (item) VALUES (?)', [newGrocery]);
-            saveDB(); // Save to server after adding grocery
+            await saveDB();
             const res = db.exec('SELECT * FROM grocery_list');
             const groceryData = res[0]?.values.map((row) => ({
               id: row[0],
@@ -735,11 +724,11 @@
         }
       }, [db]);
 
-      const saveFamilyName = () => {
+      const saveFamilyName = async () => {
         if (familyNameInput && db) {
           try {
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['family_name', familyNameInput]);
-            saveDB(); // Save to server after updating family name
+            await saveDB();
             setFamilyName(familyNameInput);
             setFamilyNameInput('');
             console.log('Family name saved:', familyNameInput);
@@ -750,13 +739,13 @@
         }
       };
 
-      const saveConfigurations = () => {
+      const saveConfigurations = async () => {
         if (db) {
           try {
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['ics_url', icsUrlInput]);
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['weather_api_key', weatherApiKeyInput]);
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['weather_city', weatherCityInput]);
-            saveDB(); // Save to server after updating configurations
+            await saveDB();
             setIcsUrl(icsUrlInput);
             setWeatherApiKey(weatherApiKeyInput);
             setWeatherCity(weatherCityInput);
@@ -815,33 +804,17 @@
             className: 'p-2 bg-blue-500 text-white rounded font-semibold'
           }, 'Set Configurations')
         ]),
-        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Save Database (Backup)'),
-        React.createElement('button', {
-          onClick: saveDBLocal,
-          className: 'w-full p-2 bg-blue-500 text-white rounded font-semibold mb-4'
-        }, 'Save Database Locally'),
-        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Load Database (Restore Backup)'),
-        React.createElement('input', {
-          type: 'file',
-          accept: '.db',
-          onChange: (e) => loadDBLocal(e.target.files[0], () => {
-            try {
-              const familyName = db.exec("SELECT value FROM settings WHERE key = 'family_name'")[0]?.values[0]?.[0] || 'Family';
-              const icsUrl = db.exec("SELECT value FROM settings WHERE key = 'ics_url'")[0]?.values[0]?.[0] || '';
-              const weatherApiKey = db.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0]?.values[0]?.[0] || '';
-              const weatherCity = db.exec("SELECT value FROM settings WHERE key = 'weather_city'")[0]?.values[0]?.[0] || '';
-              setFamilyName(familyName);
-              setIcsUrl(icsUrl);
-              setWeatherApiKey(weatherApiKey);
-              setWeatherCity(weatherCity);
-              console.log('Settings loaded from local database:', { familyName, icsUrl, weatherApiKey, weatherCity });
-            } catch (e) {
-              console.error('Failed to load settings from local database:', e);
-              alert('Error loading settings from local database.');
-            }
-          }),
-          className: 'w-full p-2 border rounded shadow-sm'
-        })
+        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Database Backup/Restore'),
+        React.createElement('div', { className: 'flex flex-wrap items-center' }, [
+          React.createElement('button', {
+            onClick: saveDB,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold mr-2 mb-2'
+          }, 'Save Database Locally'),
+          React.createElement('button', {
+            onClick: loadDBLocal,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold mb-2'
+          }, 'Load Database (Restore Backup)')
+        ])
       ]);
     }
 
@@ -855,23 +828,27 @@
       const [weatherCity, setWeatherCity] = useState('');
 
       useEffect(() => {
-        loadDB(() => {
-          setDb(db);
-          try {
-            const familyName = db.exec("SELECT value FROM settings WHERE key = 'family_name'")[0]?.values[0]?.[0] || 'Family';
-            const icsUrl = db.exec("SELECT value FROM settings WHERE key = 'ics_url'")[0]?.values[0]?.[0] || '';
-            const weatherApiKey = db.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0]?.values[0]?.[0] || '';
-            const weatherCity = db.exec("SELECT value FROM settings WHERE key = 'weather_city'")[0]?.values[0]?.[0] || '';
-            setFamilyName(familyName);
-            setIcsUrl(icsUrl);
-            setWeatherApiKey(weatherApiKey);
-            setWeatherCity(weatherCity);
-            console.log('App initialized with settings:', { familyName, icsUrl, weatherApiKey, weatherCity });
-          } catch (e) {
-            console.error('Failed to load settings:', e);
-            alert('Error loading settings.');
+        async function initialize() {
+          const newDb = await initDB();
+          if (newDb) {
+            setDb(newDb);
+            try {
+              const familyName = newDb.exec("SELECT value FROM settings WHERE key = 'family_name'")[0]?.values[0]?.[0] || 'Family';
+              const icsUrl = newDb.exec("SELECT value FROM settings WHERE key = 'ics_url'")[0]?.values[0]?.[0] || '';
+              const weatherApiKey = newDb.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0]?.values[0]?.[0] || '';
+              const weatherCity = newDb.exec("SELECT value FROM settings WHERE key = 'weather_city'")[0]?.values[0]?.[0] || '';
+              setFamilyName(familyName);
+              setIcsUrl(icsUrl);
+              setWeatherApiKey(weatherApiKey);
+              setWeatherCity(weatherCity);
+              console.log('App initialized with settings:', { familyName, icsUrl, weatherApiKey, weatherCity });
+            } catch (e) {
+              console.error('Failed to load settings:', e);
+              alert('Error loading settings.');
+            }
           }
-        });
+        }
+        initialize();
       }, []);
 
       return React.createElement('div', { className: 'flex w-full bg-gray-100' }, [
