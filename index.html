@@ -1,0 +1,944 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Calendar</title>
+  <!-- CDN scripts with error handling and fallback for ics-js -->
+  <script src="https://cdn.jsdelivr.net/npm/react@17.0.2/umd/react.production.min.js" onerror="console.error('Failed to load React'); alert('Error loading React. Check network or CDN.');"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@17.0.2/umd/react-dom.production.min.js" onerror="console.error('Failed to load ReactDOM'); alert('Error loading ReactDOM. Check network or CDN.');"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.min.js" onerror="console.error('Failed to load sql.js'); alert('Error loading sql.js. Check network or CDN.');"></script>
+  <script src="https://unpkg.com/ics-js@0.10.2/lib/ics.min.js" 
+          onerror="console.error('Failed to load ics-js from CDN'); 
+                 const fallbackScript = document.createElement('script'); 
+                 fallbackScript.src = './ics.min.js'; 
+                 fallbackScript.onerror = () => console.error('Failed to load local ics.min.js'); 
+                 document.head.appendChild(fallbackScript);"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" onerror="console.error('Failed to load Font Awesome');">
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet" onerror="console.error('Failed to load Google Fonts');">
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, Helvetica Neue, Arial, sans-serif; 
+      background-color: #f9fafb; 
+      margin: 0; 
+    }
+    #root { max-width: 1536px; margin: 0 auto; display: flex; height: 100vh; }
+    .sidebar { 
+      width: 120px; 
+      background-color: #ffffff; 
+      padding: 0.8rem 0.4rem; 
+      border-right: 1px solid #e5e7eb; 
+    }
+    .content { flex: 1; padding: 2rem; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .w-full { width: 100%; }
+    .text-center { text-align: center; }
+    .p-2 { padding: 0.5rem; }
+    .p-4 { padding: 1rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .mr-2 { margin-right: 0.5rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-4 { margin-top: 1rem; }
+    .rounded { border-radius: 0.5rem; }
+    .bg-white { background-color: #ffffff; }
+    .bg-gray-100 { background-color: #f9fafb; }
+    .bg-blue-500 { background-color: #3b82f6; }
+    .bg-green-500 { background-color: #22c55e; }
+    .bg-purple-500 { background-color: #a855f7; }
+    .text-white { color: #ffffff; }
+    .text-gray-700 { color: #374151; }
+    .text-xs { font-size: 0.65rem; }
+    .text-xl { font-size: 1.25rem; }
+    .text-2xl { font-size: 1.5rem; }
+    .text-3xl { font-size: 1.8rem; }
+    .font-semibold { font-weight: 600; }
+    .font-bold { font-weight: 700; }
+    .border { border-width: 1px; border-color: #d1d5db; }
+    .border-b { border-bottom-width: 1px; }
+    .border-blue-500 { border-color: #3b82f6; }
+    .shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    .shadow-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+    .grid { display: grid; }
+    .grid-cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .gap-2 { gap: 0.5rem; }
+    .justify-between { justify-content: space-between; }
+    .items-center { align-items: center; }
+    .line-through { text-decoration: line-through; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .flex-wrap { flex-wrap: wrap; }
+    .tab { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      padding: 0.8rem 0.2rem; 
+      font-size: 0.65rem; 
+      font-weight: 500; 
+      color: #374151; 
+      background-color: transparent; 
+      border-bottom: 1px solid #e5e7eb; 
+      transition: all 0.2s ease-in-out; 
+      cursor: pointer; 
+    }
+    .tab:hover { 
+      background-color: #f3f4f6; 
+      color: #1f2937; 
+    }
+    .tab.active { 
+      border-bottom: 2px solid #3b82f6; 
+      color: #3b82f6; 
+      font-weight: 600; 
+      background-color: #ffffff; 
+      clip-path: polygon(15% 0%, 85% 0%, 100% 100%, 0% 100%); 
+    }
+    .tab i { 
+      font-size: 1.3rem; 
+      margin-bottom: 0.3rem; 
+    }
+    .family-initial {
+      font-family: 'Great Vibes', cursive;
+      font-size: 1.8rem;
+      color: #3b82f6;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 0.8rem;
+    }
+    input, button { 
+      transition: all 0.2s ease-in-out; 
+    }
+    input:focus, button:focus { 
+      outline: none; 
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3); 
+    }
+    button:hover { 
+      filter: brightness(90%); 
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/javascript">
+    // Debugging:
+    // 1. Check Safari Web Inspector (Settings > Safari > Advanced > Web Inspector) for network errors.
+    // 2. Verify CDN URLs (e.g., https://unpkg.com/ics-js@0.10.2/lib/ics.min.js) load in a browser.
+    // 3. Ensure ics.min.js is in the same directory as index.html for local fallback.
+    // 4. Verify server endpoints (/db) return/save family_calendar.db correctly.
+    // 5. Ensure file is saved as UTF-8 without BOM.
+    // 6. Disable browser extensions to rule out interference.
+
+    const { useState, useEffect } = React;
+
+    // SQLite Database Initialization
+    let db = null;
+    async function initDB() {
+      try {
+        const SQL = await window.initSqlJs({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}`
+        });
+        db = new SQL.Database();
+        db.run(`
+          CREATE TABLE IF NOT EXISTS chores (
+            id INTEGER PRIMARY KEY,
+            task TEXT,
+            assignee TEXT,
+            points INTEGER,
+            completed BOOLEAN
+          );
+          CREATE TABLE IF NOT EXISTS meals (
+            day TEXT PRIMARY KEY,
+            meal TEXT
+          );
+          CREATE TABLE IF NOT EXISTS grocery_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item TEXT
+          );
+          CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+          );
+          INSERT OR IGNORE INTO settings (key, value) VALUES 
+            ('family_name', 'Family'),
+            ('ics_url', ''),
+            ('weather_api_key', ''),
+            ('weather_city', '');
+        `);
+        console.log('SQLite database initialized');
+        return db;
+      } catch (e) {
+        console.error('Failed to initialize SQLite:', e);
+        alert('Error initializing database. Please try reloading.');
+      }
+    }
+
+    // Save database to server
+    async function saveDB() {
+      if (db) {
+        try {
+          const data = db.export();
+          const blob = new Blob([data], { type: 'application/octet-stream' });
+          const formData = new FormData();
+          formData.append('file', blob, 'family_calendar.db');
+          const response = await fetch('/db', {
+            method: 'POST',
+            body: formData
+          });
+          if (!response.ok) throw new Error('Failed to save database');
+          console.log('Database saved to server');
+        } catch (e) {
+          console.error('Failed to save database:', e);
+          alert('Error saving database to server. Check server endpoint.');
+        }
+      }
+    }
+
+    // Load database from server
+    async function loadDB(callback) {
+      try {
+        const response = await fetch('/db');
+        if (!response.ok) throw new Error('Failed to fetch database');
+        const data = await response.arrayBuffer();
+        db = new window.SQL.Database(new Uint8Array(data));
+        console.log('Database loaded from server');
+        callback();
+      } catch (e) {
+        console.error('Failed to load database from server:', e);
+        alert('Error loading database from server. Initializing new database.');
+        return await initDB();
+      }
+    }
+
+    // Save database to local file (for backups)
+    function saveDBLocal() {
+      if (db) {
+        try {
+          const data = db.export();
+          const blob = new Blob([data], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'family_calendar.db';
+          a.click();
+          URL.revokeObjectURL(url);
+          console.log('Database saved locally');
+        } catch (e) {
+          console.error('Failed to save database locally:', e);
+          alert('Error saving database locally.');
+        }
+      }
+    }
+
+    // Load database from local file (for restoring backups)
+    function loadDBLocal(file, callback) {
+      try {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          const data = new Uint8Array(e.target.result);
+          db = new window.SQL.Database(data);
+          console.log('Database loaded from local file');
+          await saveDB(); // Sync to server after loading local file
+          callback();
+        };
+        reader.onerror = () => {
+          console.error('Failed to read local database file');
+          alert('Error loading local database file.');
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (e) {
+        console.error('Failed to load local database:', e);
+        alert('Error loading local database.');
+      }
+    }
+
+    // Calendar Component
+    function Calendar({ icsUrl }) {
+      const [events, setEvents] = useState([]);
+      const [currentMonth, setCurrentMonth] = useState(new Date());
+      const [error, setError] = useState(null);
+
+      const parseICS = (icsData) => {
+        if (!window.ICAL) {
+          console.error('ICAL is not available');
+          setError('Calendar library (ics-js) failed to load. Please check network or use local copy.');
+          return [];
+        }
+        try {
+          const cal = ICAL.parse(icsData);
+          const comp = new ICAL.Component(cal);
+          const events = comp.getAllSubcomponents('vevent').map((event) => {
+            const vevent = new ICAL.Event(event);
+            return {
+              title: vevent.summary,
+              start: vevent.startDate.toJSDate(),
+              end: vevent.endDate.toJSDate(),
+              color: '#ff6b6b' // Default color
+            };
+          });
+          console.log('ICS parsed successfully:', events);
+          setError(null);
+          return events;
+        } catch (e) {
+          console.error('ICS parsing error:', e);
+          setError('Error parsing calendar data. Ensure the ICS URL is valid.');
+          return [];
+        }
+      };
+
+      const fetchICS = () => {
+        if (icsUrl) {
+          try {
+            fetch(icsUrl, { mode: 'cors' })
+              .then((res) => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.text();
+              })
+              .then((data) => {
+                setEvents(parseICS(data));
+                console.log('ICS fetched successfully');
+              })
+              .catch((e) => {
+                console.error('Failed to fetch ICS:', e);
+                setError('Failed to fetch calendar. Ensure the ICS URL is correct and publicly accessible.');
+              });
+          } catch (e) {
+            console.error('Fetch ICS error:', e);
+            setError('Error fetching calendar.');
+          }
+        }
+      };
+
+      useEffect(() => {
+        if (icsUrl) {
+          fetchICS();
+        } else {
+          setEvents([]);
+          setError('No ICS URL set. Configure in Utilities.');
+        }
+      }, [icsUrl]);
+
+      const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+      const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
+
+      const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+      const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+
+      const renderDays = () => {
+        const days = [];
+        for (let i = 0; i < firstDay; i++) {
+          days.push(React.createElement('div', { key: `empty-${i}`, className: 'p-2' }));
+        }
+        for (let i = 1; i <= daysInMonth; i++) {
+          const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i);
+          const dayEvents = events.filter((e) => e.start.toDateString() === date.toDateString());
+          days.push(
+            React.createElement('div', {
+              key: i,
+              className: 'p-2 bg-white rounded shadow-md',
+              children: [
+                React.createElement('div', null, i),
+                ...dayEvents.map((e, idx) =>
+                  React.createElement('div', {
+                    key: idx,
+                    className: 'text-xs mt-1',
+                    style: { backgroundColor: e.color, padding: '0.25rem', borderRadius: '0.25rem' },
+                    children: e.title
+                  })
+                )
+              ]
+            })
+          );
+        }
+        return days;
+      };
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Calendar'),
+        React.createElement('p', { className: 'text-gray-700 mb-4' }, 
+          error || (icsUrl ? `ICS URL: ${icsUrl}` : 'No ICS URL set. Configure in Utilities.')
+        ),
+        icsUrl && !error && React.createElement('button', {
+          onClick: fetchICS,
+          className: 'mb-4 p-2 bg-purple-500 text-white rounded font-semibold'
+        }, 'Refresh Calendar'),
+        !error && React.createElement('div', { className: 'flex justify-between mb-4' }, [
+          React.createElement('button', {
+            onClick: prevMonth,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold'
+          }, 'Prev'),
+          React.createElement('h3', { className: 'text-xl font-semibold text-gray-700' }, 
+            currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })
+          ),
+          React.createElement('button', {
+            onClick: nextMonth,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold'
+          }, 'Next')
+        ]),
+        !error && React.createElement('div', { className: 'grid grid-cols-7 gap-2' }, renderDays())
+      ]);
+    }
+
+    // Chores Component
+    function Chores({ db }) {
+      const [chores, setChores] = useState([]);
+      const [newChore, setNewChore] = useState({ task: '', assignee: '', points: 0 });
+      const [showForm, setShowForm] = useState(false);
+
+      useEffect(() => {
+        if (db) {
+          try {
+            const res = db.exec('SELECT * FROM chores');
+            const choresData = res[0]?.values.map((row) => ({
+              id: row[0],
+              task: row[1],
+              assignee: row[2],
+              points: row[3],
+              completed: row[4] === 1
+            })) || [];
+            setChores(choresData);
+            console.log('Chores loaded:', choresData);
+          } catch (e) {
+            console.error('Failed to load chores:', e);
+            alert('Error loading chores.');
+          }
+        }
+      }, [db]);
+
+      const addChore = () => {
+        if (newChore.task && newChore.assignee && db) {
+          try {
+            db.run(
+              'INSERT INTO chores (task, assignee, points, completed) VALUES (?, ?, ?, ?)',
+              [newChore.task, newChore.assignee, newChore.points, 0]
+            );
+            saveDB(); // Save to server after adding chore
+            const res = db.exec('SELECT * FROM chores');
+            const choresData = res[0]?.values.map((row) => ({
+              id: row[0],
+              task: row[1],
+              assignee: row[2],
+              points: row[3],
+              completed: row[4] === 1
+            })) || [];
+            setChores(choresData);
+            setNewChore({ task: '', assignee: '', points: 0 });
+            setShowForm(false);
+            console.log('Chore added');
+          } catch (e) {
+            console.error('Failed to add chore:', e);
+            alert('Error adding chore.');
+          }
+        }
+      };
+
+      const toggleComplete = (id) => {
+        if (db) {
+          try {
+            db.run('UPDATE chores SET completed = NOT completed WHERE id = ?', [id]);
+            saveDB(); // Save to server after toggling
+            const res = db.exec('SELECT * FROM chores');
+            const choresData = res[0]?.values.map((row) => ({
+              id: row[0],
+              task: row[1],
+              assignee: row[2],
+              points: row[3],
+              completed: row[4] === 1
+            })) || [];
+            setChores(choresData);
+            console.log('Chore completion toggled:', id);
+          } catch (e) {
+            console.error('Failed to toggle chore:', e);
+            alert('Error updating chore.');
+          }
+        }
+      };
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Chores'),
+        React.createElement('button', {
+          onClick: () => setShowForm(!showForm),
+          className: 'mb-4 p-2 bg-green-500 text-white rounded font-semibold'
+        }, showForm ? 'Cancel' : 'Add Chore'),
+        showForm && React.createElement('div', { className: 'mb-4 flex flex-wrap items-center' }, [
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Task',
+            value: newChore.task,
+            onChange: (e) => setNewChore({ ...newChore, task: e.target.value }),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Assignee',
+            value: newChore.assignee,
+            onChange: (e) => setNewChore({ ...newChore, assignee: e.target.value }),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('input', {
+            type: 'number',
+            placeholder: 'Points',
+            value: newChore.points,
+            onChange: (e) => setNewChore({ ...newChore, points: parseInt(e.target.value) || 0 }),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('button', {
+            onClick: addChore,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold'
+          }, 'Add')
+        ]),
+        React.createElement('ul', null, chores.map((chore) =>
+          React.createElement('li', {
+            key: chore.id,
+            className: 'flex justify-between items-center p-2 border-b'
+          }, [
+            React.createElement('span', {
+              className: chore.completed ? 'line-through text-gray-700' : 'text-gray-700'
+            }, `${chore.task} (${chore.assignee}, ${chore.points} pts)`),
+            React.createElement('input', {
+              type: 'checkbox',
+              checked: chore.completed,
+              onChange: () => toggleComplete(chore.id)
+            })
+          ])
+        ))
+      ]);
+    }
+
+    // Meal Planning Component
+    function MealPlanning({ db }) {
+      const [meals, setMeals] = useState({});
+      const [groceryList, setGroceryList] = useState([]);
+      const [day, setDay] = useState('');
+      const [meal, setMeal] = useState('');
+      const [newGrocery, setNewGrocery] = useState('');
+
+      useEffect(() => {
+        if (db) {
+          try {
+            const mealsRes = db.exec('SELECT * FROM meals');
+            const mealsData = mealsRes[0]?.values.reduce((acc, row) => ({
+              ...acc,
+              [row[0]]: row[1]
+            }), {}) || {};
+            setMeals(mealsData);
+
+            const groceryRes = db.exec('SELECT * FROM grocery_list');
+            const groceryData = groceryRes[0]?.values.map((row) => ({
+              id: row[0],
+              item: row[1]
+            })) || [];
+            setGroceryList(groceryData);
+            console.log('Meals and groceries loaded:', mealsData, groceryData);
+          } catch (e) {
+            console.error('Failed to load meals/groceries:', e);
+            alert('Error loading meal planning data.');
+          }
+        }
+      }, [db]);
+
+      const addMeal = () => {
+        if (day && meal && db) {
+          try {
+            db.run('INSERT OR REPLACE INTO meals (day, meal) VALUES (?, ?)', [day, meal]);
+            saveDB(); // Save to server after adding meal
+            const res = db.exec('SELECT * FROM meals');
+            const mealsData = res[0]?.values.reduce((acc, row) => ({
+              ...acc,
+              [row[0]]: row[1]
+            }), {}) || {};
+            setMeals(mealsData);
+            setDay('');
+            setMeal('');
+            console.log('Meal added');
+          } catch (e) {
+            console.error('Failed to add meal:', e);
+            alert('Error adding meal.');
+          }
+        }
+      };
+
+      const addGrocery = () => {
+        if (newGrocery && db) {
+          try {
+            db.run('INSERT INTO grocery_list (item) VALUES (?)', [newGrocery]);
+            saveDB(); // Save to server after adding grocery
+            const res = db.exec('SELECT * FROM grocery_list');
+            const groceryData = res[0]?.values.map((row) => ({
+              id: row[0],
+              item: row[1]
+            })) || [];
+            setGroceryList(groceryData);
+            setNewGrocery('');
+            console.log('Grocery item added');
+          } catch (e) {
+            console.error('Failed to add grocery item:', e);
+            alert('Error adding grocery item.');
+          }
+        }
+      };
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Meal Planning'),
+        React.createElement('div', { className: 'mb-4 flex flex-wrap items-center' }, [
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Day (e.g., Monday)',
+            value: day,
+            onChange: (e) => setDay(e.target.value),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Meal',
+            value: meal,
+            onChange: (e) => setMeal(e.target.value),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('button', {
+            onClick: addMeal,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold'
+          }, 'Add Meal')
+        ]),
+        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Weekly Meals'),
+        React.createElement('ul', null, Object.entries(meals).map(([d, m]) =>
+          React.createElement('li', {
+            key: d,
+            className: 'p-2 border-b text-gray-700'
+          }, `${d}: ${m}`)
+        )),
+        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mt-4 mb-2' }, 'Grocery List'),
+        React.createElement('div', { className: 'mb-4 flex flex-wrap items-center' }, [
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Add grocery item',
+            value: newGrocery,
+            onChange: (e) => setNewGrocery(e.target.value),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('button', {
+            onClick: addGrocery,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold'
+          }, 'Add')
+        ]),
+        React.createElement('ul', null, groceryList.map((item) =>
+          React.createElement('li', {
+            key: item.id,
+            className: 'p-2 border-b text-gray-700'
+          }, item.item)
+        ))
+      ]);
+    }
+
+    // Weather Component
+    function Weather({ weatherApiKey, weatherCity }) {
+      const [weather, setWeather] = useState(null);
+
+      useEffect(() => {
+        if (weatherApiKey && weatherCity) {
+          try {
+            fetch(`https://api.openweathermap.org/data/2.5/weather?q=${weatherCity}&appid=${weatherApiKey}&units=metric`, { mode: 'cors' })
+              .then((res) => {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.json();
+              })
+              .then((data) => {
+                setWeather(data);
+                console.log('Weather fetched:', data);
+              })
+              .catch((e) => {
+                console.error('Failed to fetch weather:', e);
+                setWeather({ name: 'Error', main: { temp: 'N/A' }, weather: [{ description: 'Failed to fetch weather' }] });
+                alert('Error fetching weather. Check API key and city in Utilities.');
+              });
+          } catch (e) {
+            console.error('Weather fetch error:', e);
+            alert('Error fetching weather.');
+          }
+        } else {
+          setWeather(null);
+        }
+      }, [weatherApiKey, weatherCity]);
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Weather'),
+        weather
+          ? React.createElement('p', { className: 'text-gray-700' }, 
+              `${weather.name}: ${weather.main.temp}°C, ${weather.weather[0].description}`
+            )
+          : React.createElement('p', { className: 'text-gray-700' }, 
+              weatherApiKey && weatherCity ? 'Loading weather...' : 'Set API key and city in Utilities.'
+            )
+      ]);
+    }
+
+    // Utilities Component
+    function Utilities({ db, setFamilyName, setIcsUrl, setWeatherApiKey, setWeatherCity }) {
+      const [familyNameInput, setFamilyNameInput] = useState('');
+      const [icsUrlInput, setIcsUrlInput] = useState('');
+      const [weatherApiKeyInput, setWeatherApiKeyInput] = useState('');
+      const [weatherCityInput, setWeatherCityInput] = useState('');
+
+      useEffect(() => {
+        if (db) {
+          try {
+            const familyName = db.exec("SELECT value FROM settings WHERE key = 'family_name'")[0]?.values[0]?.[0] || '';
+            const icsUrl = db.exec("SELECT value FROM settings WHERE key = 'ics_url'")[0]?.values[0]?.[0] || '';
+            const weatherApiKey = db.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0]?.values[0]?.[0] || '';
+            const weatherCity = db.exec("SELECT value FROM settings WHERE key = 'weather_city'")[0]?.values[0]?.[0] || '';
+            setFamilyNameInput(familyName);
+            setIcsUrlInput(icsUrl);
+            setWeatherApiKeyInput(weatherApiKey);
+            setWeatherCityInput(weatherCity);
+            console.log('Utilities loaded settings:', { familyName, icsUrl, weatherApiKey, weatherCity });
+          } catch (e) {
+            console.error('Failed to load settings for Utilities:', e);
+            alert('Error loading settings for Utilities.');
+          }
+        }
+      }, [db]);
+
+      const saveFamilyName = () => {
+        if (familyNameInput && db) {
+          try {
+            db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['family_name', familyNameInput]);
+            saveDB(); // Save to server after updating family name
+            setFamilyName(familyNameInput);
+            setFamilyNameInput('');
+            console.log('Family name saved:', familyNameInput);
+          } catch (e) {
+            console.error('Failed to save family name:', e);
+            alert('Error saving family name.');
+          }
+        }
+      };
+
+      const saveConfigurations = () => {
+        if (db) {
+          try {
+            db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['ics_url', icsUrlInput]);
+            db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['weather_api_key', weatherApiKeyInput]);
+            db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['weather_city', weatherCityInput]);
+            saveDB(); // Save to server after updating configurations
+            setIcsUrl(icsUrlInput);
+            setWeatherApiKey(weatherApiKeyInput);
+            setWeatherCity(weatherCityInput);
+            setIcsUrlInput('');
+            setWeatherApiKeyInput('');
+            setWeatherCityInput('');
+            console.log('Configurations saved:', { icsUrlInput, weatherApiKeyInput, weatherCityInput });
+          } catch (e) {
+            console.error('Failed to save configurations:', e);
+            alert('Error saving configurations.');
+          }
+        }
+      };
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Utilities'),
+        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Set Family Name'),
+        React.createElement('div', { className: 'mb-4 flex flex-wrap items-center' }, [
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Enter family name',
+            value: familyNameInput,
+            onChange: (e) => setFamilyNameInput(e.target.value),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('button', {
+            onClick: saveFamilyName,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold'
+          }, 'Set Family Name')
+        ]),
+        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Set Calendar and Weather Configurations'),
+        React.createElement('div', { className: 'mb-4 flex flex-wrap items-center' }, [
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Google Calendar ICS URL',
+            value: icsUrlInput,
+            onChange: (e) => setIcsUrlInput(e.target.value),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'OpenWeatherMap API Key',
+            value: weatherApiKeyInput,
+            onChange: (e) => setWeatherApiKeyInput(e.target.value),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'City (e.g., Chicago)',
+            value: weatherCityInput,
+            onChange: (e) => setWeatherCityInput(e.target.value),
+            className: 'p-2 border rounded mr-2 mb-2 w-full sm:w-auto shadow-sm'
+          }),
+          React.createElement('button', {
+            onClick: saveConfigurations,
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold'
+          }, 'Set Configurations')
+        ]),
+        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Save Database (Backup)'),
+        React.createElement('button', {
+          onClick: saveDBLocal,
+          className: 'w-full p-2 bg-blue-500 text-white rounded font-semibold mb-4'
+        }, 'Save Database Locally'),
+        React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Load Database (Restore Backup)'),
+        React.createElement('input', {
+          type: 'file',
+          accept: '.db',
+          onChange: (e) => loadDBLocal(e.target.files[0], () => {
+            try {
+              const familyName = db.exec("SELECT value FROM settings WHERE key = 'family_name'")[0]?.values[0]?.[0] || 'Family';
+              const icsUrl = db.exec("SELECT value FROM settings WHERE key = 'ics_url'")[0]?.values[0]?.[0] || '';
+              const weatherApiKey = db.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0]?.values[0]?.[0] || '';
+              const weatherCity = db.exec("SELECT value FROM settings WHERE key = 'weather_city'")[0]?.values[0]?.[0] || '';
+              setFamilyName(familyName);
+              setIcsUrl(icsUrl);
+              setWeatherApiKey(weatherApiKey);
+              setWeatherCity(weatherCity);
+              console.log('Settings loaded from local database:', { familyName, icsUrl, weatherApiKey, weatherCity });
+            } catch (e) {
+              console.error('Failed to load settings from local database:', e);
+              alert('Error loading settings from local database.');
+            }
+          }),
+          className: 'w-full p-2 border rounded shadow-sm'
+        })
+      ]);
+    }
+
+    // Main App Component
+    function App() {
+      const [activeTab, setActiveTab] = useState('calendar');
+      const [db, setDb] = useState(null);
+      const [familyName, setFamilyName] = useState('Family');
+      const [icsUrl, setIcsUrl] = useState('');
+      const [weatherApiKey, setWeatherApiKey] = useState('');
+      const [weatherCity, setWeatherCity] = useState('');
+
+      useEffect(() => {
+        loadDB(() => {
+          setDb(db);
+          try {
+            const familyName = db.exec("SELECT value FROM settings WHERE key = 'family_name'")[0]?.values[0]?.[0] || 'Family';
+            const icsUrl = db.exec("SELECT value FROM settings WHERE key = 'ics_url'")[0]?.values[0]?.[0] || '';
+            const weatherApiKey = db.exec("SELECT value FROM settings WHERE key = 'weather_api_key'")[0]?.values[0]?.[0] || '';
+            const weatherCity = db.exec("SELECT value FROM settings WHERE key = 'weather_city'")[0]?.values[0]?.[0] || '';
+            setFamilyName(familyName);
+            setIcsUrl(icsUrl);
+            setWeatherApiKey(weatherApiKey);
+            setWeatherCity(weatherCity);
+            console.log('App initialized with settings:', { familyName, icsUrl, weatherApiKey, weatherCity });
+          } catch (e) {
+            console.error('Failed to load settings:', e);
+            alert('Error loading settings.');
+          }
+        });
+      }, []);
+
+      return React.createElement('div', { className: 'flex w-full bg-gray-100' }, [
+        React.createElement('div', { className: 'sidebar' }, [
+          React.createElement('div', { 
+            className: 'family-initial', 
+            children: familyName.charAt(0).toUpperCase() || 'F'
+          }),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('calendar'), 
+            className: `tab ${activeTab === 'calendar' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-calendar' }),
+            'Calendar'
+          ]),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('chores'), 
+            className: `tab ${activeTab === 'chores' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-tasks' }),
+            'Chores'
+          ]),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('meals'), 
+            className: `tab ${activeTab === 'meals' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-utensils' }),
+            'Meal Planning'
+          ]),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('weather'), 
+            className: `tab ${activeTab === 'weather' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-cloud-sun' }),
+            'Weather'
+          ]),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('utilities'), 
+            className: `tab ${activeTab === 'utilities' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-cog' }),
+            'Utilities'
+          ])
+        ]),
+        React.createElement('div', { className: 'content' }, [
+          activeTab === 'calendar' && React.createElement(Calendar, { icsUrl: icsUrl }),
+          activeTab === 'chores' && db && React.createElement(Chores, { db: db }),
+          activeTab === 'meals' && db && React.createElement(MealPlanning, { db: db }),
+          activeTab === 'weather' && React.createElement(Weather, { weatherApiKey: weatherApiKey, weatherCity: weatherCity }),
+          activeTab === 'utilities' && db && React.createElement(Utilities, { 
+            db: db, 
+            setFamilyName: setFamilyName, 
+            setIcsUrl: setIcsUrl, 
+            setWeatherApiKey: setWeatherApiKey, 
+            setWeatherCity: setWeatherCity 
+          })
+        ])
+      ]);
+    }
+
+    try {
+      ReactDOM.render(React.createElement(App), document.getElementById('root'));
+      console.log('App rendered successfully');
+    } catch (e) {
+      console.error('Failed to render app:', e);
+      alert('Error rendering app. Please check console for details.');
+    }
+  </script>
+</body>
+</html>
