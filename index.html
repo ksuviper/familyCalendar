@@ -172,70 +172,47 @@
     // SQLite Database Initialization
     let db = null;
     async function initDB() {
-      try {
-        console.log('Loading sql.js...');
-        const SQL = await window.initSqlJs({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}`
-        });
-        console.log('sql.js loaded');
-        db = new SQL.Database();
-        console.log('Database created');
-        db.run(`
-          CREATE TABLE IF NOT EXISTS chores (
-            id INTEGER PRIMARY KEY,
-            task TEXT,
-            assignee TEXT,
-            points INTEGER,
-            completed BOOLEAN
-          );
-          CREATE TABLE IF NOT EXISTS meals (
-            day TEXT PRIMARY KEY,
-            meal TEXT
-          );
-          CREATE TABLE IF NOT EXISTS grocery_list (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item TEXT
-          );
-          CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-          );
-          INSERT OR IGNORE INTO settings (key, value) VALUES 
-            ('family_name', 'Family'),
-            ('ics_url', ''),
-            ('weather_api_key', ''),
-            ('weather_city', '');
-        `);
-        console.log('Tables and settings initialized');
-        await loadDB();
-        console.log('SQLite database initialized and saved to server');
-        return db;
-      } catch (e) {
-        console.error('Failed to initialize SQLite:', e);
-        alert('Error initializing database: ' + e.message);
-        return null;
-      }
-    }
-
-    async function saveDB() {
-      if (db) {
+        console.log("Loading sql.js...");
+        const SQL = await window.initSqlJs({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}` });
+        console.log("sql.js loaded");
+        let db;
         try {
-          const data = db.export();
-          const blob = new Blob([data], { type: 'application/octet-stream' });
-          const formData = new FormData();
-          formData.append('file', blob, 'family_calendar.db');
-          const response = await fetch('/db', {
+            const response = await fetch('/db', {
+                method: 'GET',
+                headers: { 'Authorization': 'Basic ' + btoa('user:pass') }
+            });
+            if (response.ok) {
+                const arrayBuffer = await response.arrayBuffer();
+                db = new SQL.Database(new Uint8Array(arrayBuffer));
+                console.log("Database loaded from server");
+            } else {
+                db = new SQL.Database();
+                console.log("Database created");
+                db.run(`
+                    CREATE TABLE IF NOT EXISTS settings (name TEXT, value TEXT);
+                    CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, task TEXT, assignee TEXT, points INTEGER);
+                    CREATE TABLE IF NOT EXISTS meals (id INTEGER PRIMARY KEY, day TEXT, meal TEXT);
+                `);
+                console.log("Tables and settings initialized");
+                await saveDB(db);
+            }
+        } catch (e) {
+            console.error("Failed to initialize SQLite:", e);
+            throw e;
+        }
+        return db;
+    }
+    
+    async function saveDB(db) {
+        const data = db.export();
+        const formData = new FormData();
+        formData.append('file', new Blob([data]), 'family_calendar.db');
+        await fetch('/db', {
             method: 'POST',
             headers: { 'Authorization': 'Basic ' + btoa('user:pass') },
             body: formData
-          });
-          if (!response.ok) throw new Error('Failed to save database');
-          console.log('Database saved to server');
-        } catch (e) {
-          console.error('Failed to save database:', e);
-          alert('Error saving database to server.');
-        }
-      }
+        });
+        console.log("SQLite database initialized and saved to server");
     }
 
     async function loadDB() {
