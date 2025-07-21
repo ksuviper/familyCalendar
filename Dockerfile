@@ -23,7 +23,7 @@ RUN sed -i 's|;listen = 127.0.0.1:9000|listen = /run/php/php-fpm82.sock|' /etc/p
     && sed -i 's|;listen.group = nobody|listen.group = nginx|' /etc/php82/php-fpm.d/www.conf
 
 # Clone the GitHub repository
-RUN git clone https://github.com/ksuviper/familyCalendar.git ./
+RUN git clone https://github.com/ksuviper/familyCalendar.git ./app
 
 # Copy Nginx configuration
 #COPY nginx.conf /etc/nginx/nginx.conf
