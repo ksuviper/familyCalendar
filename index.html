@@ -217,6 +217,10 @@
     }
 
     async function loadDB() {
+      if (!window.SQL) {
+        alert('Database engine not loaded yet. Please try again in a moment.');
+        return;
+      }
       try {
         const response = await fetch('/db', {
           headers: { 'Authorization': 'Basic ' + btoa('user:pass') }
@@ -235,6 +239,10 @@
     }
 
     async function loadDBLocal() {
+      if (!window.SQL) {
+        alert('Database engine not loaded yet. Please try again in a moment.');
+        return;
+      }
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.db';
