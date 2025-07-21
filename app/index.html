@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Calendar</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@17.0.2/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, Helvetica Neue, Arial, sans-serif; 
+      background-color: #f9fafb; 
+      margin: 0; 
+    }
+    #root { max-width: 1536px; margin: 0 auto; display: flex; height: 100vh; }
+    .sidebar { 
+      width: 120px; 
+      background-color: #ffffff; 
+      padding: 0.8rem 0.4rem; 
+      border-right: 1px solid #e5e7eb; 
+    }
+    .content { flex: 1; padding: 2rem; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .w-full { width: 100%; }
+    .text-center { text-align: center; }
+    .p-2 { padding: 0.5rem; }
+    .p-4 { padding: 1rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .mr-2 { margin-right: 0.5rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-4 { margin-top: 1rem; }
+    .rounded { border-radius: 0.5rem; }
+    .bg-white { background-color: #ffffff; }
+    .bg-gray-100 { background-color: #f9fafb; }
+    .bg-blue-500 { background-color: #3b82f6; }
+    .bg-green-500 { background-color: #22c55e; }
+    .bg-purple-500 { background-color: #a855f7; }
+    .text-white { color: #ffffff; }
+    .text-gray-700 { color: #374151; }
+    .text-xs { font-size: 0.65rem; }
+    .text-xl { font-size: 1.25rem; }
+    .text-2xl { font-size: 1.5rem; }
+    .text-3xl { font-size: 1.8rem; }
+    .font-semibold { font-weight: 600; }
+    .font-bold { font-weight: 700; }
+    .border { border-width: 1px; border-color: #d1d5db; }
+    .border-b { border-bottom-width: 1px; }
+    .border-blue-500 { border-color: #3b82f6; }
+    .shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    .shadow-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+    .grid { display: grid; }
+    .grid-cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .gap-2 { gap: 0.5rem; }
+    .justify-between { justify-content: space-between; }
+    .items-center { align-items: center; }
+    .line-through { text-decoration: line-through; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .flex-wrap { flex-wrap: wrap; }
+    .tab { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      padding: 0.8rem 0.2rem; 
+      font-size: 0.65rem; 
+      font-weight: 500; 
+      color: #374151; 
+      background-color: transparent; 
+      border-bottom: 1px solid #e5e7eb; 
+      transition: all 0.2s ease-in-out; 
+      cursor: pointer; 
+    }
+    .tab:hover { 
+      background-color: #f3f4f6; 
+      color: #1f2937; 
+    }
+    .tab.active { 
+      border-bottom: 2px solid #3b82f6; 
+      color: #3b82f6; 
+      font-weight: 600; 
+      background-color: #ffffff; 
+      clip-path: polygon(15% 0%, 85% 0%, 100% 100%, 0% 100%); 
+    }
+    .tab i { 
+      font-size: 1.3rem; 
+      margin-bottom: 0.3rem; 
+    }
+    .family-initial {
+      font-family: 'Great Vibes', cursive;
+      font-size: 1.8rem;
+      color: #3b82f6;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 0.8rem;
+    }
+    input, button { 
+      transition: all 0.2s ease-in-out; 
+    }
+    input:focus, button:focus { 
+      outline: none; 
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3); 
+    }
+    button:hover { 
+      filter: brightness(90%); 
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const { useState, useEffect } = React;
+
+    // --- API helpers ---
+    async function apiGet(path) {
+      const res = await fetch('/api/' + path);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+    async function apiPost(path, data) {
+      const res = await fetch('/api/' + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+    async function apiPut(path, data) {
+      const res = await fetch('/api/' + path, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+    async function apiDelete(path) {
+      const res = await fetch('/api/' + path, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    // --- Chores Component ---
+    function Chores() {
+      const [chores, setChores] = useState([]);
+      const [showForm, setShowForm] = useState(false);
+      const [form, setForm] = useState({ task: '', assignee: '', points: 1 });
+
+      useEffect(() => {
+        apiGet('chores').then(setChores).catch(() => setChores([]));
+      }, []);
+
+      const addChore = async (e) => {
+        e.preventDefault();
+        const newChore = await apiPost('chores', form);
+        setChores([...chores, newChore]);
+        setForm({ task: '', assignee: '', points: 1 });
+        setShowForm(false);
+      };
+
+      const toggleComplete = async (id, completed) => {
+        const updated = await apiPut(`chores/${id}`, { completed: !completed });
+        setChores(chores.map(c => c.id === id ? updated : c));
+      };
+
+      const removeChore = async (id) => {
+        await apiDelete(`chores/${id}`);
+        setChores(chores.filter(c => c.id !== id));
+      };
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Chores'),
+        React.createElement('button', {
+          onClick: () => setShowForm(!showForm),
+          className: 'mb-4 p-2 bg-green-500 text-white rounded font-semibold'
+        }, showForm ? 'Cancel' : 'Add Chore'),
+        showForm && React.createElement('form', { className: 'mb-4', onSubmit: addChore }, [
+          React.createElement('input', {
+            className: 'border p-2 mr-2 rounded',
+            placeholder: 'Task',
+            value: form.task,
+            required: true,
+            onChange: e => setForm({ ...form, task: e.target.value })
+          }),
+          React.createElement('input', {
+            className: 'border p-2 mr-2 rounded',
+            placeholder: 'Assignee',
+            value: form.assignee,
+            onChange: e => setForm({ ...form, assignee: e.target.value })
+          }),
+          React.createElement('input', {
+            className: 'border p-2 mr-2 rounded',
+            placeholder: 'Points',
+            type: 'number',
+            min: 1,
+            value: form.points,
+            onChange: e => setForm({ ...form, points: parseInt(e.target.value) || 1 })
+          }),
+          React.createElement('button', {
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold',
+            type: 'submit'
+          }, 'Add')
+        ]),
+        React.createElement('ul', null,
+          chores.length === 0
+            ? React.createElement('li', { className: 'text-gray-500' }, 'No chores yet.')
+            : chores.map(chore =>
+              React.createElement('li', {
+                key: chore.id,
+                className: 'flex items-center justify-between border-b py-2'
+              }, [
+                React.createElement('span', {
+                  className: chore.completed ? 'line-through text-gray-400' : ''
+                }, `${chore.task} (${chore.assignee || 'Unassigned'}, ${chore.points} pts)`),
+                React.createElement('div', null, [
+                  React.createElement('button', {
+                    className: 'mr-2 p-1 rounded ' + (chore.completed ? 'bg-gray-400' : 'bg-green-400'),
+                    onClick: () => toggleComplete(chore.id, chore.completed)
+                  }, chore.completed ? 'Undo' : 'Done'),
+                  React.createElement('button', {
+                    className: 'p-1 bg-red-400 rounded',
+                    onClick: () => removeChore(chore.id)
+                  }, 'Delete')
+                ])
+              ])
+            )
+        )
+      ]);
+    }
+
+    // --- Meal Planning Component ---
+    function MealPlanning() {
+      const [meals, setMeals] = useState([]);
+      const [form, setForm] = useState({ day: '', meal: '' });
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+      useEffect(() => {
+        apiGet('meals').then(setMeals).catch(() => setMeals([]));
+      }, []);
+
+      const addMeal = async (e) => {
+        e.preventDefault();
+        const newMeal = await apiPost('meals', form);
+        setMeals([...meals.filter(m => m.day !== form.day), newMeal]);
+        setForm({ day: '', meal: '' });
+      };
+
+      const removeMeal = async (day) => {
+        await apiDelete(`meals/${day}`);
+        setMeals(meals.filter(m => m.day !== day));
+      };
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Meal Planning'),
+        React.createElement('form', { className: 'mb-4 flex flex-wrap items-center', onSubmit: addMeal }, [
+          React.createElement('select', {
+            className: 'border p-2 mr-2 rounded',
+            value: form.day,
+            required: true,
+            onChange: e => setForm({ ...form, day: e.target.value })
+          }, [React.createElement('option', { key: '', value: '' }, 'Day')].concat(
+            days.map(day => React.createElement('option', { key: day, value: day }, day))
+          )),
+          React.createElement('input', {
+            className: 'border p-2 mr-2 rounded',
+            placeholder: 'Meal',
+            value: form.meal,
+            required: true,
+            onChange: e => setForm({ ...form, meal: e.target.value })
+          }),
+          React.createElement('button', {
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold',
+            type: 'submit'
+          }, 'Add/Update')
+        ]),
+        React.createElement('ul', null,
+          days.map(day => {
+            const meal = meals.find(m => m.day === day);
+            return React.createElement('li', {
+              key: day,
+              className: 'flex items-center justify-between border-b py-2'
+            }, [
+              React.createElement('span', null, `${day}: ${meal ? meal.meal : '-'}`),
+              meal && React.createElement('button', {
+                className: 'p-1 bg-red-400 rounded',
+                onClick: () => removeMeal(day)
+              }, 'Delete')
+            ]);
+          })
+        )
+      ]);
+    }
+
+    // --- Utilities Component ---
+    function Utilities() {
+      const [settings, setSettings] = useState({ familyName: '', icsUrl: '', weatherApiKey: '', weatherCity: '' });
+      const [saving, setSaving] = useState(false);
+
+      useEffect(() => {
+        apiGet('settings').then(setSettings).catch(() => setSettings({}));
+      }, []);
+
+      const saveSettings = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        await apiPut('settings', settings);
+        setSaving(false);
+        alert('Settings saved!');
+      };
+
+      return React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-md' }, [
+        React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Utilities & Settings'),
+        React.createElement('form', { className: 'mb-4', onSubmit: saveSettings }, [
+          React.createElement('input', {
+            className: 'border p-2 mr-2 mb-2 rounded',
+            placeholder: 'Family Name',
+            value: settings.familyName || '',
+            onChange: e => setSettings({ ...settings, familyName: e.target.value })
+          }),
+          React.createElement('input', {
+            className: 'border p-2 mr-2 mb-2 rounded',
+            placeholder: 'Calendar ICS URL',
+            value: settings.icsUrl || '',
+            onChange: e => setSettings({ ...settings, icsUrl: e.target.value })
+          }),
+          React.createElement('input', {
+            className: 'border p-2 mr-2 mb-2 rounded',
+            placeholder: 'Weather API Key',
+            value: settings.weatherApiKey || '',
+            onChange: e => setSettings({ ...settings, weatherApiKey: e.target.value })
+          }),
+          React.createElement('input', {
+            className: 'border p-2 mr-2 mb-2 rounded',
+            placeholder: 'Weather City',
+            value: settings.weatherCity || '',
+            onChange: e => setSettings({ ...settings, weatherCity: e.target.value })
+          }),
+          React.createElement('button', {
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold',
+            type: 'submit',
+            disabled: saving
+          }, saving ? 'Saving...' : 'Save Settings')
+        ])
+      ]);
+    }
+
+    // --- Main App ---
+    function App() {
+      const [activeTab, setActiveTab] = useState('calendar');
+      const [settings, setSettings] = useState({ familyName: 'Family', icsUrl: '', weatherApiKey: '', weatherCity: '' });
+
+      useEffect(() => {
+        apiGet('settings').then(setSettings).catch(() => setSettings({ familyName: 'Family', icsUrl: '', weatherApiKey: '', weatherCity: '' }));
+      }, []);
+
+      return React.createElement('div', { className: 'flex w-full bg-gray-100' }, [
+        React.createElement('div', { className: 'sidebar' }, [
+          React.createElement('div', { 
+            className: 'family-initial', 
+            children: (settings.familyName || 'F').charAt(0).toUpperCase()
+          }),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('calendar'), 
+            className: `tab ${activeTab === 'calendar' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-calendar' }),
+            'Calendar'
+          ]),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('chores'), 
+            className: `tab ${activeTab === 'chores' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-tasks' }),
+            'Chores'
+          ]),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('meals'), 
+            className: `tab ${activeTab === 'meals' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-utensils' }),
+            'Meal Planning'
+          ]),
+          React.createElement('div', { 
+            onClick: () => setActiveTab('utilities'), 
+            className: `tab ${activeTab === 'utilities' ? 'active' : ''}`
+          }, [
+            React.createElement('i', { className: 'fas fa-cog' }),
+            'Utilities'
+          ])
+        ]),
+        React.createElement('div', { className: 'content' }, [
+          activeTab === 'calendar' && React.createElement('div', null, [
+            React.createElement('h2', { className: 'text-2xl font-semibold text-gray-700 mb-4' }, 'Calendar'),
+            React.createElement('p', null, 'Calendar integration coming soon!')
+          ]),
+          activeTab === 'chores' && React.createElement(Chores, null),
+          activeTab === 'meals' && React.createElement(MealPlanning, null),
+          activeTab === 'utilities' && React.createElement(Utilities, null)
+        ])
+      ]);
+    }
+
+    ReactDOM.render(React.createElement(App), document.getElementById('root'));
+  </script>
+</body>
+</html>
