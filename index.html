@@ -229,7 +229,7 @@
         console.log("SQLite database initialized and saved to server");
     }
 
-    async function loadDB() {
+    async function loadDB(setDb) {
       if (!window.SQL) {
         alert('Database engine not loaded yet. Please try again in a moment.');
         return;
@@ -240,7 +240,8 @@
         });
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
-          db = new window.SQL.Database(new Uint8Array(arrayBuffer));
+          const newDb = new window.SQL.Database(new Uint8Array(arrayBuffer));
+          setDb(newDb);
           console.log('Database loaded from server');
         } else if (response.status !== 404) {
           throw new Error('Failed to load database');
@@ -251,7 +252,7 @@
       }
     }
 
-    async function loadDBLocal() {
+    async function loadDBLocal(setDb) {
       if (!window.SQL) {
         alert('Database engine not loaded yet. Please try again in a moment.');
         return;
@@ -264,9 +265,9 @@
         if (file) {
           try {
             const arrayBuffer = await file.arrayBuffer();
-            db = new window.SQL.Database(new Uint8Array(arrayBuffer));
-            console.log('Database loaded from local file');
-            await saveDB(db);
+            const newDb = new window.SQL.Database(new Uint8Array(arrayBuffer));
+            setDb(newDb);
+            await saveDB(newDb);
             window.location.reload();
           } catch (err) {
             console.error('Failed to load local database:', err);
@@ -437,7 +438,7 @@
               'INSERT INTO chores (task, assignee, points, completed) VALUES (?, ?, ?, ?)',
               [newChore.task, newChore.assignee, newChore.points, 0]
             );
-            await saveDB();
+            await saveDB(db);
             const res = db.exec('SELECT * FROM chores');
             const choresData = res[0]?.values.map((row) => ({
               id: row[0],
@@ -461,7 +462,7 @@
         if (db) {
           try {
             db.run('UPDATE chores SET completed = NOT completed WHERE id = ?', [id]);
-            await saveDB();
+            await saveDB(db);
             const res = db.exec('SELECT * FROM chores');
             const choresData = res[0]?.values.map((row) => ({
               id: row[0],
@@ -566,7 +567,7 @@
         if (day && meal && db) {
           try {
             db.run('INSERT OR REPLACE INTO meals (day, meal) VALUES (?, ?)', [day, meal]);
-            await saveDB();
+            await saveDB(db);
             const res = db.exec('SELECT * FROM meals');
             const mealsData = res[0]?.values.reduce((acc, row) => ({
               ...acc,
@@ -587,7 +588,7 @@
         if (newGrocery && db) {
           try {
             db.run('INSERT INTO grocery_list (item) VALUES (?)', [newGrocery]);
-            await saveDB();
+            await saveDB(db);
             const res = db.exec('SELECT * FROM grocery_list');
             const groceryData = res[0]?.values.map((row) => ({
               id: row[0],
@@ -698,7 +699,7 @@
     }
 
     // Utilities Component
-    function Utilities({ db, setFamilyName, setIcsUrl, setWeatherApiKey, setWeatherCity }) {
+    function Utilities({ db, setDb, setFamilyName, setIcsUrl, setWeatherApiKey, setWeatherCity }) {
       const [familyNameInput, setFamilyNameInput] = useState('');
       const [icsUrlInput, setIcsUrlInput] = useState('');
       const [weatherApiKeyInput, setWeatherApiKeyInput] = useState('');
@@ -727,7 +728,7 @@
         if (familyNameInput && db) {
           try {
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['family_name', familyNameInput]);
-            await saveDB();
+            await saveDB(db);
             setFamilyName(familyNameInput);
             setFamilyNameInput('');
             console.log('Family name saved:', familyNameInput);
@@ -744,7 +745,7 @@
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['ics_url', icsUrlInput]);
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['weather_api_key', weatherApiKeyInput]);
             db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['weather_city', weatherCityInput]);
-            await saveDB();
+            await saveDB(db);
             setIcsUrl(icsUrlInput);
             setWeatherApiKey(weatherApiKeyInput);
             setWeatherCity(weatherCityInput);
@@ -806,12 +807,12 @@
         React.createElement('h3', { className: 'text-xl font-semibold text-gray-700 mb-2' }, 'Database Backup/Restore'),
         React.createElement('div', { className: 'flex flex-wrap items-center' }, [
           React.createElement('button', {
-            onClick: saveDB,
+            onClick: () => saveDB(db),
             className: 'p-2 bg-blue-500 text-white rounded font-semibold mr-2 mb-2',
             disabled: !db // <-- disable if db is not ready
           }, 'Save Database Locally'),
           React.createElement('button', {
-            onClick: loadDBLocal,
+            onClick: () => loadDBLocal(setDb),
             className: 'p-2 bg-blue-500 text-white rounded font-semibold mb-2',
             disabled: !db // <-- disable if db is not ready
           }, 'Load Database (Restore Backup)')
@@ -901,6 +902,7 @@
           activeTab === 'weather' && React.createElement(Weather, { weatherApiKey: weatherApiKey, weatherCity: weatherCity }),
           activeTab === 'utilities' && db && React.createElement(Utilities, { 
             db: db, 
+            setDb: setDb,
             setFamilyName: setFamilyName, 
             setIcsUrl: setIcsUrl, 
             setWeatherApiKey: setWeatherApiKey, 
