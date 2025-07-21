@@ -794,11 +794,13 @@
         React.createElement('div', { className: 'flex flex-wrap items-center' }, [
           React.createElement('button', {
             onClick: saveDB,
-            className: 'p-2 bg-blue-500 text-white rounded font-semibold mr-2 mb-2'
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold mr-2 mb-2',
+            disabled: !db // <-- disable if db is not ready
           }, 'Save Database Locally'),
           React.createElement('button', {
             onClick: loadDBLocal,
-            className: 'p-2 bg-blue-500 text-white rounded font-semibold mb-2'
+            className: 'p-2 bg-blue-500 text-white rounded font-semibold mb-2',
+            disabled: !db // <-- disable if db is not ready
           }, 'Load Database (Restore Backup)')
         ])
       ]);
