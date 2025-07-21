@@ -1,12 +1,16 @@
+version: '3.8'
 services:
   backend:
     build: ./app/backend
-    ports:
-      - "3000:3000"
     environment:
-      - DATABASE_URL=postgres://user:pass@db:5432/familycalendar
+      POSTGRES_DB: familycalendar
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_HOST: db
     depends_on:
       - db
+    ports:
+      - "3000:3000"
     networks:
       - app-network
 
