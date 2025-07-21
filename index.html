@@ -190,9 +190,22 @@
                 db = new SQL.Database();
                 console.log("Database created");
                 db.run(`
-                    CREATE TABLE IF NOT EXISTS settings (name TEXT, value TEXT);
-                    CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY, task TEXT, assignee TEXT, points INTEGER);
-                    CREATE TABLE IF NOT EXISTS meals (id INTEGER PRIMARY KEY, day TEXT, meal TEXT);
+                    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+                    CREATE TABLE IF NOT EXISTS chores (
+                      id INTEGER PRIMARY KEY,
+                      task TEXT,
+                      assignee TEXT,
+                      points INTEGER,
+                      completed INTEGER DEFAULT 0
+                    );
+                    CREATE TABLE IF NOT EXISTS meals (
+                      day TEXT PRIMARY KEY,
+                      meal TEXT
+                    );
+                    CREATE TABLE IF NOT EXISTS grocery_list (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      item TEXT
+                    );
                 `);
                 console.log("Tables and settings initialized");
                 await saveDB(db);
@@ -253,7 +266,7 @@
             const arrayBuffer = await file.arrayBuffer();
             db = new window.SQL.Database(new Uint8Array(arrayBuffer));
             console.log('Database loaded from local file');
-            await saveDB();
+            await saveDB(db);
             window.location.reload();
           } catch (err) {
             console.error('Failed to load local database:', err);
