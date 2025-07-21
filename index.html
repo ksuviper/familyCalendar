@@ -407,6 +407,7 @@
 
     // Chores Component
     function Chores({ db }) {
+      console.log('Chores component rendered, db:', db);
       const [chores, setChores] = useState([]);
       const [newChore, setNewChore] = useState({ task: '', assignee: '', points: 0 });
       const [showForm, setShowForm] = useState(false);
@@ -700,6 +701,7 @@
 
     // Utilities Component
     function Utilities({ db, setDb, setFamilyName, setIcsUrl, setWeatherApiKey, setWeatherCity }) {
+      console.log('Utilities component rendered, db:', db);
       const [familyNameInput, setFamilyNameInput] = useState('');
       const [icsUrlInput, setIcsUrlInput] = useState('');
       const [weatherApiKeyInput, setWeatherApiKeyInput] = useState('');
