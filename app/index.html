@@ -358,7 +358,7 @@
         if (!icsUrl) return;
         setLoading(true);
         setError('');
-        fetch(icsUrl)
+        fetch('/api/calendar?url=' + encodeURIComponent(icsUrl))
           .then(res => {
             if (!res.ok) throw new Error('Failed to fetch calendar');
             return res.text();

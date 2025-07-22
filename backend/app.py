@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import psycopg2
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -136,6 +137,19 @@ def update_settings():
         return jsonify({'success': True})
     except Exception as e:
         print("Error in update_settings:", e)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/calendar')
+def proxy_calendar():
+    ics_url = request.args.get('url')
+    if not ics_url:
+        return jsonify({'error': 'Missing url'}), 400
+    try:
+        r = requests.get(ics_url)
+        r.raise_for_status()
+        return Response(r.text, mimetype='text/calendar')
+    except Exception as e:
+        print("Error fetching ICS:", e)
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
