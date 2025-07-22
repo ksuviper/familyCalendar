@@ -121,18 +121,22 @@ def get_settings():
 
 @app.route('/api/settings', methods=['PUT'])
 def update_settings():
-    data = request.json
-    conn = get_db()
-    cur = conn.cursor()
-    for k, v in data.items():
-        cur.execute(
-            'INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',
-            (k, v)
-        )
-    conn.commit()
-    cur.close()
-    conn.close()
-    return jsonify({'success': True})
+    try:
+        data = request.json
+        conn = get_db()
+        cur = conn.cursor()
+        for k, v in data.items():
+            cur.execute(
+                'INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',
+                (k, v)
+            )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        print("Error in update_settings:", e)
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000)
