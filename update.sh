@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # filepath: update.sh
 
 set -e
